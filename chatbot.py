@@ -6,7 +6,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from telegram import Update
 from io import StringIO
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -16,7 +16,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 FOOTBALL_TEAMS_API = os.getenv("FOOTBALL_TEAMS_API")
 FOOTBALL_DATA_TOKEN = os.getenv("FOOTBALL_DATA_TOKEN")
 FOOTBALL_SCORES_API = os.getenv("FOOTBALL_SCORES_API")
-TIMER = 180
+TIMER = 300
 
 TODAY = datetime.datetime.now().strftime("%d-%m-%Y")
 
@@ -162,7 +162,7 @@ async def check_results(context: CallbackContext):
              (away_team == team and desired_outcome == 'vittoria' and score_home < score_away):
             outcome = "Vittoria"
             single_data['esito'] = outcome
-            single_data['data'] = f"{TODAY}:{data_dict['dataOra']}"
+            single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
             single_data['partita'] = data_dict['descrizioneAvventimento']
             single_data['risultato'] = data_dict['risultato']
             single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
@@ -170,7 +170,7 @@ async def check_results(context: CallbackContext):
              (away_team == team and desired_outcome == 'perdita' and score_home > score_away):
             outcome = "Perdita"
             single_data['esito'] = outcome
-            single_data['data'] = f"{TODAY}:{data_dict['dataOra']}"
+            single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
             single_data['partita'] = data_dict['descrizioneAvventimento']
             single_data['risultato'] = data_dict['risultato']
             single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
