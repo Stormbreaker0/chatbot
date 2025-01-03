@@ -211,7 +211,9 @@ async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = update.message.chat_id
     data = f"{team}:{numero}:{desired_outcome}"
-
+    # stop all running job 
+    await stop_all(update=update, context=context)
+    # schedule the new job
     job = context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=str(chat_id))
 
     active_jobs[chat_id] = job
@@ -226,7 +228,7 @@ async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         job = active_jobs.pop(chat_id)
         job.schedule_removal()
     logger.info("Tutti i monitoraggi sono stati fermati.")
-    await update.message.reply_text("L'invio delle notifiche è stato fermato")
+    # await update.message.reply_text("L'invio delle notifiche è stato fermato")
    
 
 def main():

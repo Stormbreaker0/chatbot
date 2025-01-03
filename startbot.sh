@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Navigate to the directory containing your Python application
-cd /home/virgil/Desktop/chatbot || { echo "Failed to navigate to /home/virgil/Desktop/chatbot"; exit 1; }
+current_path=$(pwd)
+# Print the current path
+echo "The current absolute path is: $current_path"
+cd "$current_path" || { echo "Failed to navigate to /home/virgil/Desktop/chatbot"; exit 1; }
 
 # Create and activate the virtual environment (if it doesn't exist)
 if [ ! -d "venv" ]; then
