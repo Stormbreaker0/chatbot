@@ -4,9 +4,9 @@ import datetime
 import aiohttp
 import pandas as pd
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from io import StringIO
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext, CallbackQueryHandler
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -33,12 +33,79 @@ active_jobs = {}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(f'Ciao {update.effective_user.first_name}')
+    """Send a welcome message when the command /start is issued."""
+    welcome_message = (
+        f"👋 *Benvenuto, {update.effective_user.first_name}!* 🎉\n\n"
+        "Sono un bot qui per aiutarti con notifiche e controlli sui risultati sportivi.\n\n"
+        "📚 *Per iniziare*: Usa i comandi disponibili:\n"
+        "➡️ /aiuto - Scopri tutte le funzionalità che posso offrirti!\n\n"
+        "💡 *Consiglio*: Configura le tue preferenze per sfruttare al meglio il bot!"
+    )
+    # Definisci il menu
+    keyboard = [
+        [InlineKeyboardButton("📖 Aiuto", callback_data='aiuto')],
+        [InlineKeyboardButton("⚽ Codici Squadre", callback_data='squadre')],
+        [InlineKeyboardButton("⏱ Imposta Timer", callback_data='timer')],
+        [InlineKeyboardButton("✅ Inizia Monitoraggio", callback_data='imposta')],
+        [InlineKeyboardButton("⏹ Ferma Monitoraggio", callback_data='stop')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        welcome_message,
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+
+
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle menu button clicks."""
+    query = update.callback_query
+    await query.answer()  # Conferma l'interazione col pulsante
+
+    if query.data == 'aiuto':
+        await help_command(update=update, context=context)
+    elif query.data == 'squadre':
+        await get_codes_teams(update, context)
+    elif query.data == 'timer':
+        await query.edit_message_text("Utilizzo: /timer <minuti>")
+    elif query.data == 'imposta':
+        await query.edit_message_text("Utilizzo: /imposta <Squadra> <Numero> <Esito desiderato>")
+    elif query.data == 'stop':
+        await stop_all(update, context)
+    else:
+        await query.edit_message_text("Comando non riconosciuto.")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /help is issued."""
-    await update.message.reply_text("Aiuto!")
+    """Send a message when the command /aiuto is issued."""
+    help_msg = (
+        "📖 *Benvenuto nella guida del bot!*\n\n"
+        "Ecco la lista dei comandi disponibili:\n\n"
+        "✅ /start - Avvia il bot e inizia a utilizzarlo\n"
+        "⏹ /stop - Ferma tutti i risultati pianificati\n"
+        "⚽ /imposta <CodiceSquadra> <Numero> <Esito>\n"
+        "   _Esempio_: ROM 2 Perdita\n"
+        "   Ricevi notifiche quando la tua squadra (es: Roma) perde due volte consecutive\n"
+        "⏱ /timer #minuti - Imposta l'intervallo di controllo dei risultati\n"
+        "   _Default_: 3 minuti\n"
+        "📋 /squadre - Mostra l'elenco delle squadre disponibili con i rispettivi codici\n"
+        "ℹ️ /aiuto - Mostra questa guida\n\n"
+        "💡 *Suggerimento*: Usa i comandi esattamente come indicato per ottenere il massimo dal bot!"
+    )
+
+    if update.message:  # If the message exists, respond with the help message
+        await update.message.reply_text(
+            help_msg,
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+    elif update.callback_query:  # If the callback query exists (as it might happen in the menu)
+        await update.callback_query.message.reply_text(
+            help_msg,
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
 
 
 async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -50,7 +117,7 @@ async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         seconds = minutes * 60
 
         if seconds < 0:
-            await update.effective_message.reply_text("Sorry, we cannot go back to the future!")
+            await update.effective_message.reply_text("mi dispiace, non possiamo tornare al futuro!")
             return
 
         await stop_all(update=update, context=context)
@@ -83,7 +150,11 @@ async def get_codes_teams(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         teams_df.to_csv(output, index=True, sep='\t')
         output.seek(0)
 
-        await update.message.reply_document(document=output, filename="squadre.txt")
+        # await update.message.reply_document(document=output, filename="squadre.txt")
+        if update.message:  # If the message exists, respond with the squadre message
+            await update.message.reply_document(document=output, filename="squadre.txt")
+        elif update.callback_query:  # If the callback query exists (as it might happen in the menu)
+            await update.callback_query.message.reply_document(document=output, filename="squadre.txt")
 
 
 async def get_all_matchs():
@@ -228,7 +299,12 @@ async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         job = active_jobs.pop(chat_id)
         job.schedule_removal()
     logger.info("Tutti i monitoraggi sono stati fermati.")
-    # await update.message.reply_text("L'invio delle notifiche è stato fermato")
+    stop_msg = "L'invio delle notifiche è stato fermato"
+    if update.message:  # If the message exists, respond with the help message
+        await update.message.reply_text(stop_msg)
+    elif update.callback_query:  # If the callback query exists (as it might happen in the menu)
+        await update.callback_query.message.reply_text(stop_msg)
+    # await update.message.reply_text("L'invio delle notifiche è stato fermato")  # no longer use
    
 
 def main():
@@ -237,6 +313,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler('squadre', get_codes_teams))
+    app.add_handler(CallbackQueryHandler(menu_callback))  # Gestisce i pulsanti del menu
     app.add_handler(CommandHandler("aiuto", help_command))
     app.add_handler(CommandHandler('imposta', start_monitoring))
     app.add_handler(CommandHandler("stop", stop_all))
