@@ -1,6 +1,5 @@
 *.json
 req.py
-*__pycache__
 var
 etc
-venv
+*venv
