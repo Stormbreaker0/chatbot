@@ -30,21 +30,19 @@ logger = logging.getLogger(__name__)
 
 # Dizionario per tenere traccia dei lavori (monitoraggi) in corso
 active_jobs = {}
-team_results = []
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(f'Hello {update.effective_user.first_name}')
+    await update.message.reply_text(f'Ciao {update.effective_user.first_name}')
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
-    await update.message.reply_text("Help!")
+    await update.message.reply_text("Aiuto!")
 
 
 async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Add a job to the queue."""
-    chat_id = update.effective_message.chat_id
+    """Set global timer"""
 
     try:
         # args[0] should contain the time for the timer in minutes
@@ -85,7 +83,7 @@ async def get_codes_teams(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         teams_df.to_csv(output, index=True, sep='\t')
         output.seek(0)
 
-        await update.message.reply_document(document=output, filename="teams_list.txt")
+        await update.message.reply_document(document=output, filename="squadre.txt")
 
 
 async def get_all_matchs():
