@@ -1,10 +1,8 @@
-import logging
 import os
+import logging
 import datetime
-import json
 import aiohttp
 import pandas as pd
-from tempfile import TemporaryDirectory
 from dotenv import load_dotenv
 from telegram import Update
 from io import StringIO
@@ -13,7 +11,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Messa
 # Load environment variables from the .env file
 load_dotenv()
 
-tmp_dir = TemporaryDirectory()
 # Get the token from the .env file
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 FOOTBALL_TEAMS_API = os.getenv("FOOTBALL_TEAMS_API")
@@ -21,6 +18,9 @@ FOOTBALL_DATA_TOKEN = os.getenv("FOOTBALL_DATA_TOKEN")
 FOOTBALL_SCORES_API = os.getenv("FOOTBALL_SCORES_API")
 TIMER = 180
 
+TODAY = datetime.datetime.now().strftime("%d-%m-%Y")
+
+OLD_TABLE = ""
 # Set up logging configuration
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -40,6 +40,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /help is issued."""
     await update.message.reply_text("Help!")
+
+
+async def set_timer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add a job to the queue."""
+    chat_id = update.effective_message.chat_id
+
+    try:
+        # args[0] should contain the time for the timer in minutes
+        minutes = float(context.args[0])
+        seconds = minutes * 60
+
+        if seconds < 0:
+            await update.effective_message.reply_text("Sorry, we cannot go back to the future!")
+            return
+
+        await stop_all(update=update, context=context)
+        global TIMER
+        TIMER = seconds
+        text = "Timer impostato con successo!\n Reimposta la squadra!"
+
+        await update.effective_message.reply_text(text)
+
+    except (IndexError, ValueError):
+        await update.effective_message.reply_text("Usage: /timer <minutes>")
 
 
 async def get_codes_teams(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -72,132 +96,154 @@ async def get_all_matchs():
             "Access-Control-Allow-Headers":"Keep-Alive,User-Agent,X-Requested-With,Cache-Control,Content-Type,Authorization,user_data,pragma,channel,tokenKeep-Alive,User-Agent,X-Requested-With,Cache-Control,Content-Type,Authorization,user_data,pragma,channel,token",
             "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"
         }
-        today = datetime.datetime.now().strftime("%d-%m-%Y")
-        request_url = os.path.join(FOOTBALL_SCORES_API, today)
+        
+        request_url = os.path.join(FOOTBALL_SCORES_API, TODAY)
         response = await client.get(request_url, headers=headers)
         if response.status == 200:
-            results = await response.json()[0]
+            results = await response.json()
             return results
         logger.info(f"Errore nell'ottenere i dati: {response.status}")
         return []
 
-def format_results_table(results, desired_outcome):
-    table = "| Squadra Casa | Squadra Trasferta | Risultato | Esito |\n"
-    table += "|--------------|------------------|-----------|-------|\n"
 
-    for match in results:
-        home_team = match['home_team']
-        away_team = match['away_team']
-        score_home = match['score_home']
-        score_away = match['score_away']
-        
-        if desired_outcome == 'Pareggio' and score_home == score_away:
-            outcome = "Pareggio"
-        elif desired_outcome == 'Vittoria' and score_home > score_away:
-            outcome = f"{home_team} ha vinto"
-        elif desired_outcome == 'Vittoria' and score_away > score_home:
-            outcome = f"{away_team} ha vinto"
+async def verifica_esito_consecutive(lista_dizionari, n, esito):
+    count = 0
+    ultime_partite = lista_dizionari[:n]  # Prendi le ultime n partite
+    for partita in ultime_partite:
+        if partita['esito'].lower() == esito:
+            count += 1
         else:
-            continue
+            return False  # Se trovi una partita che non è una vittoria, restituisci False
+    return count == n  # Restituisce True solo se tutte le n partite sono vittorie
 
-        table += f"| {home_team}      | {away_team}         | {score_home}-{score_away}   | {outcome} |\n"
 
+async def format_table_as_markdown(data):
+    table = "```\n"
+    headers = "home_team | away_team | risultato | data"
+    table += headers + "\n"
+    table += "-" * len(headers) + "\n"
+    for item in data:
+        row = f"{item['home_team']} | {item['away_team']} | {item['risultato']} | {item['data']}"
+        table += row + "\n"
+    table += "```"
     return table
+
 
 async def check_results(context: CallbackContext):
     data = context.job.data
     team, numero, desired_outcome = data.split(':')
-    table = ""
-    count = 0
+    numero = int(numero)
+    logger.info(f"{team} {numero} {desired_outcome}")
+    output = []
+    outcome = ""
+    desired_outcome = desired_outcome.lower()
 
     all_matchs = await get_all_matchs()
     for data_dict in all_matchs:
+        outcome = ""
         home_team, away_team = data_dict['descrizioneAvventimento'].split(' - ')
-        score = data_dict['risultato'].split('-')
-        score_home = int(score[0])
-        score_away = int(score[1])
+        single_data = {
+            'home_team': home_team,
+            'away_team': away_team
+                       
+        }
+        score_home, score_away = map(int, data_dict['risultato'].split('-'))
 
-        if home_team == team:
-            # null
-            if desired_outcome.lower() == 'pareggio' and score_home == score_away and home_team == team:
-                outcome = "Pareggio"
-            # win
-            elif desired_outcome.lower() == 'Vittoria' and score_home > score_away:
-                outcome = "Vittoria"
-            # loss
+        if (home_team == team and desired_outcome == 'pareggio' and score_home == score_away) or \
+           (away_team == team and desired_outcome == 'pareggio' and score_home == score_away):
+            outcome = "Pareggio"
+            single_data['esito'] = outcome
+            single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
+            single_data['partita'] = data_dict['descrizioneAvventimento']
+            single_data['risultato'] = data_dict['risultato']
+            single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
+
+        elif (home_team == team and desired_outcome == 'vittoria' and score_home > score_away) or \
+             (away_team == team and desired_outcome == 'vittoria' and score_home < score_away):
+            outcome = "Vittoria"
+            single_data['esito'] = outcome
+            single_data['data'] = f"{TODAY}:{data_dict['dataOra']}"
+            single_data['partita'] = data_dict['descrizioneAvventimento']
+            single_data['risultato'] = data_dict['risultato']
+            single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
+        elif (home_team == team and desired_outcome == 'perdita' and score_home < score_away) or \
+             (away_team == team and desired_outcome == 'perdita' and score_home > score_away):
+            outcome = "Perdita"
+            single_data['esito'] = outcome
+            single_data['data'] = f"{TODAY}:{data_dict['dataOra']}"
+            single_data['partita'] = data_dict['descrizioneAvventimento']
+            single_data['risultato'] = data_dict['risultato']
+            single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
+
+        if outcome:
+            output.append(single_data)
+
+    if output:
+        logger.info(output)
+        if await verifica_esito_consecutive(output, numero, desired_outcome):
+            ultime_partite = output[:numero]
+            new_table = await format_table_as_markdown(ultime_partite)
+            global OLD_TABLE
+            if new_table != OLD_TABLE:
+                await context.bot.send_message(chat_id=context.job.chat_id, text=new_table, parse_mode="Markdown")
+                OLD_TABLE = new_table
             else:
-                continue
-        if away_team == team:
-            # null
-            if desired_outcome.lower() == 'pareggio' and score_home == score_away:
-                outcome = "Pareggio"
-            # win
-            elif desired_outcome.lower() == 'Vittoria' and score_home > score_away:
-                outcome = "Vittoria"
-            elif desired_outcome.lower() == 'Vittoria' and score_away > score_home:
-                outcome = f"Vittoria"
+                logger.info("same output as the last one")
+        else:
+            logger.info("Any output available")
+    else:
+        await context.bot.send_message(
+            chat_id=context.job.chat_id,
+            text=f"Risultati not found now!"
+        )
 
-            # loss
-        # results render
-        # table = format_results_table(results, desired_outcome)
-
-    if table:
-        await context.bot.send_message(chat_id=context.job.context['chat_id'], text=f"**Risultati con esito desiderato: {desired_outcome}**\n\n{table}")
 
 async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if len(context.args) == 0 or len(context.args) > 3:
-        await update.message.reply_text("Utilizzo corretto: /get_results <Squadra> <Numero> <Esito desiderato>")
+        await update.message.reply_text("Utilizzo corretto: /imposta <Squadra> <Numero> <Esito desiderato>")
         return
 
     try:
         team, numero = context.args[:-1]
         desired_outcome = context.args[-1]
     except Exception as e:
-        logger.exception(e, "Setting default arguments")
+        logger.info(e, "Setting default arguments")
         numero = 3
         desired_outcome = "vittoria"
 
     chat_id = update.message.chat_id
     data = f"{team}:{numero}:{desired_outcome}"
 
-    job = context.job_queue.run_repeating(check_results, interval=TIMER, data=data, chat_id=chat_id, name=str(f"job-{chat_id}"))
+    job = context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=str(chat_id))
 
     active_jobs[chat_id] = job
     logger.info(active_jobs)
-    logger.info(f"Inizio monitoraggio risultati per le squadre {', '.join(team)} con esito desiderato: {desired_outcome}")
+    logger.info(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
-    await update.message.reply_text(f"Inizio monitoraggio risultati per le squadre {', '.join(team)} con esito desiderato: {desired_outcome}")
+    await update.message.reply_text(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
-async def stop_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.message.chat_id
-    job_id = f"job-{chat_id}"
-    if job_id in active_jobs:
-        # Ferma il lavoro
-        job = active_jobs.pop(chat_id)
-        job.schedule_removal()
-        await update.message.reply_text("Monitoraggio fermato.")
-    else:
-        await update.message.reply_text("Non c'è alcun monitoraggio attivo.")
 
 async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for chat_id in list(active_jobs.keys()):
-        job_id = f"job-{chat_id}"
-        job = active_jobs.pop(job_id)
+        job = active_jobs.pop(chat_id)
         job.schedule_removal()
-    await update.message.reply_text("Tutti i monitoraggi sono stati fermati.")
+    logger.info("Tutti i monitoraggi sono stati fermati.")
+    await update.message.reply_text("L'invio delle notifiche è stato fermato")
+   
 
 def main():
     """Start the bot."""
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler('teams', get_codes_teams))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler('set_team', start_monitoring))
-    app.add_handler(CommandHandler("stop", stop_monitoring))
-    app.add_handler(CommandHandler("stop_all", stop_all))
-
+    app.add_handler(CommandHandler('squadre', get_codes_teams))
+    app.add_handler(CommandHandler("aiuto", help_command))
+    app.add_handler(CommandHandler('imposta', start_monitoring))
+    app.add_handler(CommandHandler("stop", stop_all))
+    app.add_handler(CommandHandler("timer", set_timer))
+    
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == "__main__":
     main()
