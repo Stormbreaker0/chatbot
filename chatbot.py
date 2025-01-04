@@ -85,7 +85,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "✅ /start - Avvia il bot e inizia a utilizzarlo\n"
         "⏹ /stop - Ferma tutti i risultati pianificati\n"
         "⚽ /imposta <CodiceSquadra> <Numero> <Esito>\n"
-        "   _Esempio_: ROM 2 Perdita\n"
+        "   _Esempio_: /imposta ROM 2 Perdita\n"
         "   Ricevi notifiche quando la tua squadra (es: Roma) perde due volte consecutive\n"
         "⏱ /timer #minuti - Imposta l'intervallo di controllo dei risultati\n"
         "   _Default_: 3 minuti\n"
