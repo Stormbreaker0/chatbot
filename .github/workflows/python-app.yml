@@ -32,4 +32,4 @@ jobs:
     - name: Run Telegram Bot
       run: |
         source venv/bin/activate  # Activate the virtual environment
-        python chatbot.py  # Run the Telegram bot script
+        screen -dmS telegram-bot python chatbot.py
