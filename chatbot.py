@@ -20,16 +20,15 @@ TIMER = 300
 
 TODAY = datetime.datetime.now().strftime("%d-%m-%Y")
 
-OLD_TABLE = ""
+#results storage
+OLD_TABLE = {}
+
 # Set up logging configuration
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-# Dizionario per tenere traccia dei lavori (monitoraggi) in corso
-active_jobs = {}
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -200,7 +199,7 @@ async def format_table_as_markdown(data):
 
 async def check_results(context: CallbackContext):
     data = context.job.data
-    team, numero, desired_outcome = data.split(':')
+    team, numero, desired_outcome = data.split('-')
     numero = int(numero)
     logger.info(f"{team} {numero} {desired_outcome}")
     output = []
@@ -218,8 +217,8 @@ async def check_results(context: CallbackContext):
         }
         score_home, score_away = map(int, data_dict['risultato'].split('-'))
 
-        if (home_team == team and desired_outcome == 'pareggio' and score_home == score_away) or \
-           (away_team == team and desired_outcome == 'pareggio' and score_home == score_away):
+        if (home_team == team and score_home == score_away) or \
+           (away_team == team and score_home == score_away):
             outcome = "Pareggio"
             single_data['esito'] = outcome
             single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
@@ -227,16 +226,16 @@ async def check_results(context: CallbackContext):
             single_data['risultato'] = data_dict['risultato']
             single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
 
-        elif (home_team == team and desired_outcome == 'vittoria' and score_home > score_away) or \
-             (away_team == team and desired_outcome == 'vittoria' and score_home < score_away):
+        elif (home_team == team and score_home > score_away) or \
+             (away_team == team and score_home < score_away):
             outcome = "Vittoria"
             single_data['esito'] = outcome
             single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
             single_data['partita'] = data_dict['descrizioneAvventimento']
             single_data['risultato'] = data_dict['risultato']
             single_data['partita_id'] = f"{data_dict['codicePalinsesto']}_{data_dict['codiceAvvenimento']}"
-        elif (home_team == team and desired_outcome == 'perdita' and score_home < score_away) or \
-             (away_team == team and desired_outcome == 'perdita' and score_home > score_away):
+        elif (home_team == team and score_home < score_away) or \
+             (away_team == team and score_home > score_away):
             outcome = "Perdita"
             single_data['esito'] = outcome
             single_data['data'] = f"{TODAY}H{data_dict['dataOra']}"
@@ -253,9 +252,10 @@ async def check_results(context: CallbackContext):
             ultime_partite = output[:numero]
             new_table = await format_table_as_markdown(ultime_partite)
             global OLD_TABLE
-            if new_table != OLD_TABLE:
+            if new_table != OLD_TABLE.get(data, None):
+                await context.bot.send_message(chat_id=context.job.chat_id, text=data)
                 await context.bot.send_message(chat_id=context.job.chat_id, text=new_table, parse_mode="Markdown")
-                OLD_TABLE = new_table
+                OLD_TABLE[data] = new_table
             else:
                 logger.info("same output as the last one")
         else:
@@ -265,6 +265,7 @@ async def check_results(context: CallbackContext):
             chat_id=context.job.chat_id,
             text=f"Risultati not found now!"
         )
+    logger.info(OLD_TABLE)
 
 
 async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -281,31 +282,35 @@ async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         desired_outcome = "vittoria"
 
     chat_id = update.message.chat_id
-    data = f"{team}:{numero}:{desired_outcome}"
+    data = f"{team}-{numero}-{desired_outcome}"
     # stop all running job 
-    await stop_all(update=update, context=context)
+    # await stop_all(update=update, context=context)
     # schedule the new job
-    job = context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=str(chat_id))
-
-    active_jobs[chat_id] = job
-    logger.info(active_jobs)
+    context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=f"{chat_id}-{data}")
+    logger.info("Job added")
     logger.info(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
     await update.message.reply_text(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
 
 async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    for chat_id in list(active_jobs.keys()):
-        job = active_jobs.pop(chat_id)
-        job.schedule_removal()
-    logger.info("Tutti i monitoraggi sono stati fermati.")
-    stop_msg = "L'invio delle notifiche è stato fermato"
-    if update.message:  # If the message exists, respond with the help message
-        await update.message.reply_text(stop_msg)
-    elif update.callback_query:  # If the callback query exists (as it might happen in the menu)
-        await update.callback_query.message.reply_text(stop_msg)
-    # await update.message.reply_text("L'invio delle notifiche è stato fermato")  # no longer use
-   
+
+    logger.info(context.job_queue.jobs())
+    try:
+        await context.job_queue.stop()
+        logger.info("Tutti i monitoraggi sono stati fermati.")
+        stop_msg = "L'invio delle notifiche è stato fermato"
+        if update.message:  # If the message exists, respond with the help message
+            await update.message.reply_text(stop_msg)
+        elif update.callback_query:  # If the callback query exists (as it might happen in the menu)
+            await update.callback_query.message.reply_text(stop_msg)
+        # await update.message.reply_text("L'invio delle notifiche è stato fermato")  # no longer use
+        global OLD_TABLE
+        OLD_TABLE.clear()
+        await context.job_queue.start()
+    except Exception as e:
+        logger.info(e)
+    
 
 def main():
     """Start the bot."""
