@@ -1,28 +1,35 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Chatbot application
+name: Deploy Telegram Bot
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-permissions:
-  contents: read
+    branches:
+      - main  # Run workflow on push to the main branch
 
 jobs:
-  run_bot:
-
-    runs-on: self-hosted
+  deploy:
+    runs-on: self-hosted  # Use your Linux self-hosted runner
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        python-version: "3.10"
-    - name: Start bot
+        python-version: '3.10'  # Adjust to your Python version
+
+    - name: Set Up Virtual Environment
       run: |
-        bash startbot.sh
+        python -m venv venv  # Create a virtual environment
+        source venv/bin/activate  # Activate the virtual environment
+        python -m pip install --upgrade pip  # Upgrade pip
+
+    - name: Install Dependencies
+      run: |
+        source venv/bin/activate  # Activate the virtual environment
+        pip install -r requirements.txt  # Install dependencies
+
+    - name: Run Telegram Bot
+      run: |
+        source venv/bin/activate  # Activate the virtual environment
+        python chatbot.py  # Run the Telegram bot script
