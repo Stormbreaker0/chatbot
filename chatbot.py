@@ -2,6 +2,7 @@ import os
 import logging
 import datetime
 import aiohttp
+from yarl import URL
 import pandas as pd
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -157,20 +158,35 @@ async def get_codes_teams(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def get_all_matchs():
-    async with aiohttp.ClientSession() as client:
+    async with aiohttp.ClientSession() as session:
+
         headers = {
+            "Accept": "*/*",
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
+            # "Cookie": "_abck=67597457CD0B7E682305BE879F70D225~0~YAAQthZlX5uWZ0KUAQAA0xWkVQ3BBN5tGe5VCAtvR6yalQEYR6JoKVCnmvN7q+Gp77+K7GRcr2JbORhbMhUtq/joFhtqfFQgSOgxAuxyT8bjwaCRDwuRwsP8X5151QbMZrPr/kXTpFB4m9yYiLG5mi9qJQOkQKEfGaoX9T++Y35RRGfZMkGN8i+PExiK3jmpx2UviP4KKc/Ck29kr3nv1GrRkunBk9eMYfJPAjDiELPpj77br08W0izKrHTMQ6CC+thhg7SADJGqoZ+XUXE51zYfaqCQfCAploZOtPjE0pafKlY0w7ufkpr5fArlToD9PIJgznAbEvfeyG1ASW8IRAR+AmYt1FO/CnUvDJTzqJW7pJRDvrSAlSXCcNjgfsh6120/rOlZRr9VRJApQXmrgq86PAgPlOTx+RNcfLe1kGByhFekyonRhS4OD0Ifmif7FMTkV/TDFIVKAZphYtkN4WE…n3Lb2JJLMm3LlQwm23SJxe+fcuAnt6cOm81MX+J7IE=~1; akaalb_betting_it=~op=betting_sisal_it:farm-a-betting_IT|~rv=43~m=farm-a-betting_IT:0|~os=7e3c2469c276ac9f83abff0fc0704b0b~id=e56236f944a613ae3631727987666e62; dtCookie=v_4_srv_6_sn_9F64ABA4916BC9375ECD75919AFE280F_perc_100000_ol_0_mul_1_app-3A24666996558c94c6_1; akaalb_areaprivata_k8s=1736605406~op=areaprivata_k8s:farm-c-k8s-areaprivata|~rv=78~m=farm-c-k8s-areaprivata:0|~os=dd03fa8a11190c6108e78fa392bf53c1~id=3f7f0ce73c37484b9c4b824d6f99f7c5; cookie_siteid=62"
             "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
-            "Referer": "https://betting.sisal.it/",
+            "Referer": "https://www.sisal.it/",
+            "Host": "betting.sisal.it",
+            "Origin":"https://www.sisal.it/"
         }
-        
+        base_url = "https://betting.sisal.it"
+        async with session.get(base_url, headers=headers) as home_response:
+            logger.info(f"Home Page Status: {home_response.status}")
+            # Convert base_url to a yarl.URL object
+            home_url = URL(base_url)
+            logger.info(f"Home Page Cookies: {session.cookie_jar.filter_cookies(home_url)}")
+
         request_url = os.path.join(FOOTBALL_SCORES_API, TODAY)
-        response = await client.get(request_url, headers=headers)
-        if response.status == 200:
-            results = await response.json()
-            return results
-        logger.info(f"Errore nell'ottenere i dati: {response.status}")
+        # Step 2: Access the API endpoint
+        async with session.get(request_url, headers=headers) as response:
+            logger.info(f"API Status Code:{response.status}")
+            api_url_obj = URL(request_url)
+            logger.info(f"API Cookies: {session.cookie_jar.filter_cookies(api_url_obj)}")
+            if response.status == 200:
+                results = await response.json()
+                return results
+            logger.info(f"Errore nell'ottenere i dati: {response.status}")
         return []
 
 
