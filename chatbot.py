@@ -260,11 +260,13 @@ async def check_results(context: CallbackContext):
                 logger.info("same output as the last one")
         else:
             logger.info("Any output available")
+
     else:
-        await context.bot.send_message(
-            chat_id=context.job.chat_id,
-            text=f"Risultati not found now!"
-        )
+        logger.info("Results not found")
+        # await context.bot.send_message(
+        #     chat_id=context.job.chat_id,
+        #     text=f"Risultati not found now!"
+        # )
     logger.info(OLD_TABLE)
 
 
