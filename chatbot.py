@@ -160,9 +160,9 @@ async def get_all_matchs():
     async with aiohttp.ClientSession() as client:
         headers = {
             "Accept-Encoding": "gzip, deflate, br",
-            "Connection" : "keep-alive",
-            "Access-Control-Allow-Headers":"Keep-Alive,User-Agent,X-Requested-With,Cache-Control,Content-Type,Authorization,user_data,pragma,channel,tokenKeep-Alive,User-Agent,X-Requested-With,Cache-Control,Content-Type,Authorization,user_data,pragma,channel,token",
-            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"
+            "Connection": "keep-alive",
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+            "Referer": "https://betting.sisal.it/",
         }
         
         request_url = os.path.join(FOOTBALL_SCORES_API, TODAY)
