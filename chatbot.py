@@ -304,11 +304,18 @@ async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     # stop all running job 
     # await stop_all(update=update, context=context)
     # schedule the new job
-    context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=f"{chat_id}-{data}")
-    logger.info("Job added")
-    logger.info(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
-    await update.message.reply_text(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
+    job = context.job_queue.get_jobs_by_name(name=f"{chat_id}-{data}")
+
+    if job:
+        logger.info("Job already scheduled!!")
+        await update.message.reply_text("Già pianificato, Ti manderò i risultati appena saranno disponibili")
+    else:
+        context.job_queue.run_repeating(check_results, first=1, interval=TIMER, data=data, chat_id=chat_id, name=f"{chat_id}-{data}")
+        logger.info("Job added")
+        logger.info(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
+
+        await update.message.reply_text(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
 
 async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
