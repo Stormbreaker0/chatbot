@@ -4,3 +4,4 @@ var
 etc
 *venv
 main.py
+.env

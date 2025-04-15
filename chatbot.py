@@ -203,7 +203,7 @@ async def verifica_esito_consecutive(lista_dizionari, n, esito):
 
 async def format_table_as_markdown(data):
     table = "```\n"
-    headers = "home_team | away_team | risultato | data"
+    headers = "home_team | away_team | score | data"
     table += headers + "\n"
     table += "-" * len(headers) + "\n"
     for item in data:
@@ -315,7 +315,7 @@ async def start_monitoring(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         logger.info("Job added")
         logger.info(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
-        await update.message.reply_text(f"Inizio monitoraggio risultati per la squadra {str(team)}\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
+        await update.message.reply_text(f"La richiesta di risultati per la squadra  {str(team)} è presa in carico\nEsito desiderato: {desired_outcome}\nNumero di esito consecutive: {numero}")
 
 
 async def stop_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
